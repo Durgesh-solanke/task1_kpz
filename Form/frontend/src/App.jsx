@@ -54,7 +54,7 @@ export default function ExcelDropzone() {
       const jsonData = dataRows.map((row) =>
         Object.fromEntries(row.map((cell, i) => [cleanedHeaders[i], cell]))
       );
-
+      // checking the parsed data
       console.log("Parsed Excel Data:", jsonData);
       setExcelData(jsonData);
 
@@ -66,14 +66,10 @@ export default function ExcelDropzone() {
         });
         alert("✅ Data successfully uploaded to MongoDB.");
       } catch (error) {
-        if (error.response) {
-          console.error("Backend error response:", error.response.data);
-        } else if (error.request) {
-          console.error("No response received:", error.request);
-        } else {
-          console.error("Request error:", error.message);
-        }
-        alert("❌ Failed to upload data. See console for details.");
+        alert(
+          "❌ Failed to upload data. See console for details.",
+          error.message
+        );
       }
     };
 
@@ -98,31 +94,43 @@ export default function ExcelDropzone() {
 
   const yMin = Math.min(...yValues);
   const yMax = Math.max(...yValues);
-  const yPadding = 18; // Fixed padding
+  const yPadding = 1; // Fixed padding
   // Chart.js data
+  const colorMap = {
+    TWX: {
+      borderColor: "blue",
+      backgroundColor: "rgba(0, 0, 255, 0.2)",
+    },
+    TWY: {
+      borderColor: "green",
+      backgroundColor: "rgba(234, 223, 187, 0.2)",
+    },
+    TWZ: {
+      borderColor: "purple",
+      backgroundColor: "rgba(128, 0, 128, 0.2)",
+    },
+  };
   const chartData = {
     labels: excelData.map((row) => row.Speed ?? "Unknown"), // X-axis from 'Speed' column
     datasets: [
       {
         label: selectedYAxis,
         data: yValues,
-        borderColor: selectedYAxis === "TWX" ? "blue" : "red",
+        borderColor: colorMap[selectedYAxis]?.borderColor || "gray",
         backgroundColor:
-          selectedYAxis === "TWX"
-            ? "rgba(0, 0, 255, 0.2)"
-            : "rgba(255, 0, 0, 0.2)",
+          colorMap[selectedYAxis]?.backgroundColor ||
+          "rgba(128, 128, 128, 0.2)",
         tension: 0.3,
       },
     ],
   };
 
-  // Chart.js options
   const chartOptions = {
     responsive: true,
     scales: {
       y: {
-        min: yMin - yPadding, // e.g. -6859 - 100 = -6959
-        max: yMax + yPadding, // e.g. -6837 + 100 = -6737
+        min: yMin - yPadding,
+        max: yMax + yPadding,
         title: {
           display: true,
           text: selectedYAxis,
@@ -134,7 +142,14 @@ export default function ExcelDropzone() {
       x: {
         title: {
           display: true,
-          text: "Speed",
+          text: "Time (s)",
+        },
+        type: "linear", // 👈 Important: Treat X as numeric
+        min: 30,
+        max: 60,
+        ticks: {
+          stepSize: 1, // 👈 Show every 1 second
+          callback: (value) => `${value}`, // Optional: Format with "s"
         },
       },
     },
@@ -168,7 +183,7 @@ export default function ExcelDropzone() {
 
       {/* Dropdown for Y-axis selection */}
       {excelData.length > 0 && (
-        <div style={{ marginTop: "20px" }}>
+        <div style={{ marginTop: "20px", color: "White" }}>
           <label htmlFor="yAxisSelect">Select Y-Axis: </label>
           <select
             id="yAxisSelect"
@@ -176,6 +191,7 @@ export default function ExcelDropzone() {
             onChange={(e) => setSelectedYAxis(e.target.value)}
           >
             <option value="TWX">TWX</option>
+            <option value="TWY">TWY</option>
             <option value="TWZ">TWZ</option>
           </select>
         </div>
@@ -183,7 +199,7 @@ export default function ExcelDropzone() {
 
       {/* Chart rendering */}
       {excelData.length > 0 ? (
-        <div style={{ width: "80%", margin: "20px auto" }}>
+        <div style={{ width: "80%", margin: "20px auto", color: "White" }}>
           <Line data={chartData} options={chartOptions} />
         </div>
       ) : (

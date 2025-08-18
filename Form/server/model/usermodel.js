@@ -24,6 +24,10 @@ const UserSchemaKPZ = mongoos.Schema({
         type: Number,
         required: true
     },
+    TWY: {
+        type: Number,
+        required: true
+    },
     TWZ: {
         type: Number,
         required: true

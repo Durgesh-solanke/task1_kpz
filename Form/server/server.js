@@ -6,7 +6,7 @@ import cors from "cors"
 
 app.use(cors())
 
-
+app.use(express.json({ limit: '10mb' }));
 app.use(bodyParser.json())
 
 mongoose.connect("mongodb://localhost:27017/form_full")
