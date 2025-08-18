@@ -15,4 +15,21 @@ const userSchema = mongoos.Schema({
     // }
 })
 
-export default mongoos.model("users", userSchema);
+const UserSchemaKPZ = mongoos.Schema({
+    Speed: {
+        type: Number,
+        required: true
+    },
+    TWX: {
+        type: Number,
+        required: true
+    },
+    TWZ: {
+        type: Number,
+        required: true
+    },
+
+})
+
+// export default mongoos.model("users", userSchema);
+export default mongoos.model("usersKPZ", UserSchemaKPZ);

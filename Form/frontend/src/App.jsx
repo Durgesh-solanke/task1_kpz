@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useDropzone } from "react-dropzone";
 import * as XLSX from "xlsx";
+import axios from "axios";
 import {
   Chart as ChartJS,
   LineElement,
@@ -11,6 +12,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+
 import { Line } from "react-chartjs-2";
 import "./App.css";
 
@@ -36,7 +38,8 @@ export default function ExcelDropzone() {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+
+    reader.onload = async (e) => {
       const data = new Uint8Array(e.target.result);
       const workbook = XLSX.read(data, { type: "array" });
 
@@ -54,11 +57,30 @@ export default function ExcelDropzone() {
 
       console.log("Parsed Excel Data:", jsonData);
       setExcelData(jsonData);
+
+      //  send to backend
+      try {
+        console.log("Sending data to backend:", jsonData);
+        await axios.post("http://localhost:5000/api/userKPZ", {
+          data: jsonData,
+        });
+        alert("✅ Data successfully uploaded to MongoDB.");
+      } catch (error) {
+        if (error.response) {
+          console.error("Backend error response:", error.response.data);
+        } else if (error.request) {
+          console.error("No response received:", error.request);
+        } else {
+          console.error("Request error:", error.message);
+        }
+        alert("❌ Failed to upload data. See console for details.");
+      }
     };
 
     reader.readAsArrayBuffer(file);
   };
 
+  // permission of the only xls and xlsx files....
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
@@ -76,7 +98,7 @@ export default function ExcelDropzone() {
 
   const yMin = Math.min(...yValues);
   const yMax = Math.max(...yValues);
-  const yPadding = 100; // Fixed padding
+  const yPadding = 18; // Fixed padding
   // Chart.js data
   const chartData = {
     labels: excelData.map((row) => row.Speed ?? "Unknown"), // X-axis from 'Speed' column

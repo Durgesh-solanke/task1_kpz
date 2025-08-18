@@ -1,4 +1,4 @@
-import user from "../model/usermodel.js"
+import UserKPZ from "../model/usermodel.js"
 
 // we add data here with the help of the schema......
 
@@ -18,6 +18,43 @@ const create = async (req, res) => {
         res.status(500).json({ errorMessage: err.message })
     }
 }
+
+// create  KPZ data
+
+
+
+const createKPZ = async (req, res) => {
+    try {
+        const { data } = req.body;
+
+        if (!Array.isArray(data) || data.length === 0) {
+            return res.status(400).json({ error: "No data provided" });
+        }
+
+        const savedRecords = await UserKPZ.insertMany(data, { ordered: false });
+
+        res.status(200).json({ message: "Data inserted", count: savedRecords.length });
+    } catch (err) {
+        if (err.name === 'ValidationError') {
+            const errors = Object.values(err.errors).map(e => ({
+                field: e.path,
+                message: e.message
+            }));
+            return res.status(400).json({ error: "ValidationError", details: errors });
+        }
+
+        if (err.name === 'BulkWriteError') {
+            return res.status(500).json({ error: "BulkWriteError", details: err.message });
+        }
+
+        console.error("Server Error:", err);
+        res.status(500).json({ error: "Server Error", details: err.message });
+    }
+};
+
+
+
+
 const getallUsers = async (req, res) => {
     try {
         const userData = await user.find();
@@ -83,4 +120,4 @@ const deleteUser = async (req, res) => {
 }
 
 
-export default { getallUsers, create, getuserbyId, update, deleteUser }
+export default { getallUsers, create, getuserbyId, update, deleteUser, createKPZ }
