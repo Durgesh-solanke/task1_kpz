@@ -94,7 +94,7 @@ export default function ExcelDropzone() {
 
   const yMin = Math.min(...yValues);
   const yMax = Math.max(...yValues);
-  const yPadding = 1; // Fixed padding
+  const yPadding = 5; // Fixed padding
   // Chart.js data
   const colorMap = {
     TWX: {
@@ -149,10 +149,14 @@ export default function ExcelDropzone() {
         max: 60,
         ticks: {
           stepSize: 1, // 👈 Show every 1 second
-          callback: (value) => `${value}`, // Optional: Format with "s"
+          // callback: (value) => `${value}`, // Optional: Format with "s"
         },
       },
     },
+    grid: {
+      color: "#ffffff", // ✅ white grid lines
+    },
+
     plugins: {
       legend: {
         position: "top",

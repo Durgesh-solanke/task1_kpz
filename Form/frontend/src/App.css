@@ -6,7 +6,9 @@ body {
   padding: 0;
   font-family: sans-serif;
 }
-
+canvas {
+  background-color: rgb(248, 240, 240);
+}
 .dropzone {
   border: 2px dashed #888;
   border-radius: 12px;
@@ -30,6 +32,7 @@ body {
   border-color: black;
 
 }
+
 
 /* Inner text styling */
 .dropzone p {
