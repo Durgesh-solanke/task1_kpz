@@ -9,8 +9,8 @@ const userSchema = mongoos.Schema({
         type: String,
         required: true
     },
-    // password: {
-    //     type: String,
+    // mark: {
+    //     type: Number,    
     //     required: true
     // }
 })
