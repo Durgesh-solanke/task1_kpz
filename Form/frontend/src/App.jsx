@@ -28,7 +28,20 @@ ChartJS.register(
 
 export default function ExcelDropzone() {
   const [excelData, setExcelData] = useState([]);
-  const [selectedYAxis, setSelectedYAxis] = useState("TWX"); // Y-axis column selection
+  const [showChart, setShowChart] = useState(true);
+
+  const [selectedYAxes, setSelectedYAxes] = useState({
+    TWX: true,
+    TWY: false,
+    TWZ: false,
+  });
+
+  const handleYAxisChange = (axis) => {
+    setSelectedYAxes((prev) => ({
+      ...prev,
+      [axis]: !prev[axis],
+    }));
+  };
 
   const onDrop = (acceptedFiles) => {
     const file = acceptedFiles[0];
@@ -54,11 +67,10 @@ export default function ExcelDropzone() {
       const jsonData = dataRows.map((row) =>
         Object.fromEntries(row.map((cell, i) => [cleanedHeaders[i], cell]))
       );
-      // checking the parsed data
+
       console.log("Parsed Excel Data:", jsonData);
       setExcelData(jsonData);
 
-      //  send to backend
       try {
         console.log("Sending data to backend:", jsonData);
         await axios.post("http://localhost:5000/api/userKPZ", {
@@ -66,17 +78,14 @@ export default function ExcelDropzone() {
         });
         alert("✅ Data successfully uploaded to MongoDB.");
       } catch (error) {
-        alert(
-          "❌ Failed to upload data. See console for details.",
-          error.message
-        );
+        alert("❌ Failed to upload data. See console for details.");
+        console.error(error.message);
       }
     };
 
     reader.readAsArrayBuffer(file);
   };
 
-  // permission of the only xls and xlsx files....
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
@@ -87,15 +96,6 @@ export default function ExcelDropzone() {
     },
   });
 
-  // Safely extract Y-axis values from selected column
-  const yValues = excelData
-    .map((row) => Number(row[selectedYAxis]))
-    .filter((val) => !isNaN(val));
-
-  const yMin = Math.min(...yValues);
-  const yMax = Math.max(...yValues);
-  const yPadding = 5; // Fixed padding
-  // Chart.js data
   const colorMap = {
     TWX: {
       borderColor: "blue",
@@ -110,30 +110,47 @@ export default function ExcelDropzone() {
       backgroundColor: "rgba(128, 0, 128, 0.2)",
     },
   };
-  const chartData = {
-    labels: excelData.map((row) => row.Speed ?? "Unknown"), // X-axis from 'Speed' column
-    datasets: [
-      {
-        label: selectedYAxis,
-        data: yValues,
-        borderColor: colorMap[selectedYAxis]?.borderColor || "gray",
+
+  // Build datasets dynamically
+  const datasets = Object.keys(selectedYAxes)
+    .filter((axis) => selectedYAxes[axis])
+    .map((axis) => {
+      const values = excelData
+        .map((row) => Number(row[axis]))
+        .filter((v) => !isNaN(v));
+
+      return {
+        label: axis,
+        data: values,
+        borderColor: colorMap[axis]?.borderColor || "gray",
         backgroundColor:
-          colorMap[selectedYAxis]?.backgroundColor ||
-          "rgba(128, 128, 128, 0.2)",
-        tension: 0.3,
-      },
-    ],
+          colorMap[axis]?.backgroundColor || "rgba(128, 128, 128, 0.2)",
+        tension: 0, // ➜ STRAIGHT lines
+        pointRadius: 0, // ➜ HIDE data points
+        // pointHoverRadius: 0, // ➜ No effect on hover
+      };
+    });
+
+  const allYValues = datasets.flatMap((ds) => ds.data);
+  const yMin = Math.min(...allYValues);
+  const yMax = Math.max(...allYValues);
+  const yPadding = 5;
+
+  const chartData = {
+    labels: excelData.map((row) => Number(row.Speed) ?? "Unknown"),
+    datasets: datasets,
   };
 
   const chartOptions = {
     responsive: true,
+    animation: false, // 🔧 Disable animation
     scales: {
       y: {
         min: yMin - yPadding,
         max: yMax + yPadding,
         title: {
           display: true,
-          text: selectedYAxis,
+          text: "Y-Axis Values",
         },
         ticks: {
           stepSize: Math.ceil((yMax - yMin + 2 * yPadding) / 5),
@@ -142,28 +159,23 @@ export default function ExcelDropzone() {
       x: {
         title: {
           display: true,
-          text: "Time (s)",
+          text: "Speed (X-Axis)",
         },
-        type: "linear", // 👈 Important: Treat X as numeric
+        type: "linear",
         min: 30,
         max: 60,
         ticks: {
-          stepSize: 1, // 👈 Show every 1 second
-          // callback: (value) => `${value}`, // Optional: Format with "s"
+          stepSize: 1,
         },
       },
     },
-    grid: {
-      color: "#ffffff", // ✅ white grid lines
-    },
-
     plugins: {
       legend: {
         position: "top",
       },
       title: {
         display: true,
-        text: `Line Chart for ${selectedYAxis}`,
+        text: "Line Chart for Selected Axes",
       },
     },
   };
@@ -185,30 +197,61 @@ export default function ExcelDropzone() {
         )}
       </div>
 
-      {/* Dropdown for Y-axis selection */}
-      {excelData.length > 0 && (
-        <div style={{ marginTop: "20px", color: "White" }}>
-          <label htmlFor="yAxisSelect">Select Y-Axis: </label>
-          <select
-            id="yAxisSelect"
-            value={selectedYAxis}
-            onChange={(e) => setSelectedYAxis(e.target.value)}
-          >
-            <option value="TWX">TWX</option>
-            <option value="TWY">TWY</option>
-            <option value="TWZ">TWZ</option>
-          </select>
-        </div>
-      )}
+      {/* Show/Hide Chart Toggle */}
+      <div style={{ marginTop: "20px", color: "white" }}>
+        <label>
+          <input
+            type="checkbox"
+            checked={showChart}
+            onChange={() => setShowChart((prev) => !prev)}
+          />
+          &nbsp; Show Plot
+        </label>
+      </div>
 
-      {/* Chart rendering */}
-      {excelData.length > 0 ? (
-        <div style={{ width: "80%", margin: "20px auto", color: "White" }}>
-          <Line data={chartData} options={chartOptions} />
+      {/* Chart Section */}
+      {excelData.length > 0 && showChart ? (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "flex-start",
+            gap: "20px",
+            marginTop: "20px",
+          }}
+        >
+          {/* Y-Axis Checkbox Section */}
+          <div style={{ color: "white", minWidth: "180px" }}>
+            <p>Select Y-Axes:</p>
+            {["TWX", "TWY", "TWZ"].map((axis) => (
+              <label
+                key={axis}
+                style={{ display: "block", marginBottom: "8px" }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedYAxes[axis]}
+                  onChange={() => handleYAxisChange(axis)}
+                />
+                &nbsp; {axis}
+              </label>
+            ))}
+          </div>
+
+          {/* Chart Display */}
+          <div style={{ flex: 1 }}>
+            {datasets.length === 0 ? (
+              <p style={{ color: "white" }}>
+                Please select at least one Y-axis to plot.
+              </p>
+            ) : (
+              <Line data={chartData} options={chartOptions} />
+            )}
+          </div>
         </div>
-      ) : (
+      ) : excelData.length === 0 ? (
         <p style={{ marginTop: "20px" }}>No data to display yet.</p>
-      )}
+      ) : null}
     </div>
   );
 }
