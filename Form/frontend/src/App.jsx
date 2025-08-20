@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useDropzone } from "react-dropzone";
-import * as XLSX from "xlsx";
 import axios from "axios";
 import {
   Chart as ChartJS,
@@ -12,7 +11,6 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-
 import { Line } from "react-chartjs-2";
 import "./App.css";
 
@@ -26,144 +24,145 @@ ChartJS.register(
   Legend
 );
 
+const getRandomColor = () => "#282727ff"; // Always return black
+
 export default function ExcelDropzone() {
   const [excelData, setExcelData] = useState([]);
+  const [selectedAxis, setSelectedAxis] = useState(""); // Radio selected column
+  const [availableAxes, setAvailableAxes] = useState([]);
   const [showChart, setShowChart] = useState(true);
+  const [columnUnits, setColumnUnits] = useState({});
 
-  const [selectedYAxes, setSelectedYAxes] = useState({
-    TWX: true,
-    TWY: false,
-    TWZ: false,
-  });
-
-  const handleYAxisChange = (axis) => {
-    setSelectedYAxes((prev) => ({
-      ...prev,
-      [axis]: !prev[axis],
-    }));
+  const handleAxisChange = (axis) => {
+    setSelectedAxis(axis);
   };
 
   const onDrop = (acceptedFiles) => {
     const file = acceptedFiles[0];
     if (!file) {
-      alert("Please upload an Excel file.");
+      alert("Please upload a file.");
       return;
     }
 
-    const reader = new FileReader();
+    if (file.name.endsWith(".out") || file.name.endsWith(".txt")) {
+      const reader = new FileReader();
 
-    reader.onload = async (e) => {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: "array" });
+      reader.onload = async (e) => {
+        const text = e.target.result;
+        const lines = text
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
 
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+        const headerLineIndex = lines.findIndex((line) =>
+          line.startsWith("Time")
+        );
+        if (headerLineIndex === -1) {
+          alert("❌ Header row not found in .out file.");
+          return;
+        }
 
-      const [headerRow, ...dataRows] = raw;
-      const cleanedHeaders = headerRow.map((h, i) =>
-        h ? h.toString().trim() : `Column${i}`
-      );
+        const unitLineIndex = headerLineIndex + 1;
 
-      const jsonData = dataRows.map((row) =>
-        Object.fromEntries(row.map((cell, i) => [cleanedHeaders[i], cell]))
-      );
+        const headers = lines[headerLineIndex].split(/\s+/);
+        const unitsLine = lines[unitLineIndex]?.split(/\s+/) || [];
 
-      console.log("Parsed Excel Data:", jsonData);
-      setExcelData(jsonData);
-
-      try {
-        console.log("Sending data to backend:", jsonData);
-        await axios.post("http://localhost:5000/api/userKPZ", {
-          data: jsonData,
+        const columnUnitMap = {};
+        headers.forEach((h, idx) => {
+          const unit = unitsLine[idx] || "";
+          columnUnitMap[h] = unit;
         });
-        alert("✅ Data successfully uploaded to MongoDB.");
-      } catch (error) {
-        alert("❌ Failed to upload data. See console for details.");
-        console.error(error.message);
-      }
-    };
+        setColumnUnits(columnUnitMap);
 
-    reader.readAsArrayBuffer(file);
+        const dataLines = lines.slice(unitLineIndex + 1);
+
+        const parsedData = dataLines.map((line) => {
+          const values = line.split(/\s+/).map(Number);
+          return Object.fromEntries(
+            values.map((val, idx) => [headers[idx], val])
+          );
+        });
+
+        setExcelData(parsedData);
+
+        const yAxes = headers.filter((h) => h !== "Time");
+        setAvailableAxes(yAxes);
+        setSelectedAxis(yAxes[0] || "");
+
+        // Optional: Upload to backend
+        try {
+          await axios.post("http://localhost:5000/api/userKPZ", {
+            data: parsedData,
+          });
+          alert("✅ Data uploaded to MongoDB.");
+        } catch (error) {
+          console.error(error.message);
+          alert("❌ Failed to upload to MongoDB.");
+        }
+      };
+
+      reader.readAsText(file);
+    } else {
+      alert("Please upload a valid .out or .txt file.");
+    }
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [
-        ".xlsx",
-      ],
-      "application/vnd.ms-excel": [".xls"],
+      "text/plain": [".out", ".txt"],
     },
   });
 
-  const colorMap = {
-    TWX: {
-      borderColor: "blue",
-      backgroundColor: "rgba(0, 0, 255, 0.2)",
-    },
-    TWY: {
-      borderColor: "green",
-      backgroundColor: "rgba(234, 223, 187, 0.2)",
-    },
-    TWZ: {
-      borderColor: "purple",
-      backgroundColor: "rgba(128, 0, 128, 0.2)",
-    },
-  };
-
-  // Build datasets dynamically
-  const datasets = Object.keys(selectedYAxes)
-    .filter((axis) => selectedYAxes[axis])
-    .map((axis) => {
-      const values = excelData
-        .map((row) => Number(row[axis]))
-        .filter((v) => !isNaN(v));
-
-      return {
-        label: axis,
-        data: values,
-        borderColor: colorMap[axis]?.borderColor || "gray",
-        backgroundColor:
-          colorMap[axis]?.backgroundColor || "rgba(128, 128, 128, 0.2)",
-        tension: 0, // ➜ STRAIGHT lines
-        pointRadius: 0, // ➜ HIDE data points
-        // pointHoverRadius: 0, // ➜ No effect on hover
-      };
-    });
-
-  const allYValues = datasets.flatMap((ds) => ds.data);
-  const yMin = Math.min(...allYValues);
-  const yMax = Math.max(...allYValues);
-  const yPadding = 5;
-
   const chartData = {
-    labels: excelData.map((row) => Number(row.Speed) ?? "Unknown"),
-    datasets: datasets,
+    labels: excelData.map((row) => Number(row["Time"]) ?? "Unknown"),
+    datasets: selectedAxis
+      ? [
+          {
+            label: selectedAxis,
+            data: excelData.map((row) => Number(row[selectedAxis]) || 0),
+            borderColor: getRandomColor(selectedAxis),
+            backgroundColor: "rgba(0,0,0,0)",
+            tension: 0,
+            pointRadius: 0,
+          },
+        ]
+      : [],
   };
+
+  // Calculate Y-axis scale padding
+  const yValues = chartData.datasets[0]?.data || [];
+  const yMin = Math.min(...yValues);
+  const yMax = Math.max(...yValues);
+  const yRange = yMax - yMin;
+
+  // Smart padding: if values barely change, apply a fixed zoom-out
+  const yPadding = yRange < 1e-5 ? 1 : yRange * 0.1;
 
   const chartOptions = {
     responsive: true,
-    animation: false, // 🔧 Disable animation
+    animation: false,
     scales: {
       y: {
         min: yMin - yPadding,
         max: yMax + yPadding,
         title: {
           display: true,
-          text: "Y-Axis Values",
-        },
-        ticks: {
-          stepSize: Math.ceil((yMax - yMin + 2 * yPadding) / 5),
+          text: selectedAxis
+            ? `${selectedAxis} ${
+                columnUnits[selectedAxis] ? `${columnUnits[selectedAxis]}` : ""
+              }`
+            : "Y-Axis",
         },
       },
       x: {
         title: {
           display: true,
-          text: "Speed (X-Axis)",
+          text: "Time (s)",
         },
         type: "linear",
-        min: 30,
-        max: 60,
+        min: Math.min(...chartData.labels),
+        max: Math.max(...chartData.labels),
         ticks: {
           stepSize: 1,
         },
@@ -175,14 +174,14 @@ export default function ExcelDropzone() {
       },
       title: {
         display: true,
-        text: "Line Chart for Selected Axes",
+        text: "Line Chart for Selected Column",
       },
     },
   };
 
   return (
     <div className="App">
-      <h2>Upload Excel File to Plot Data</h2>
+      <h2>Upload .out File to Plot Data</h2>
 
       <div
         {...getRootProps({
@@ -191,9 +190,9 @@ export default function ExcelDropzone() {
       >
         <input {...getInputProps()} />
         {isDragActive ? (
-          <p>Drop the Excel file here...</p>
+          <p>Drop the .out or .txt file here...</p>
         ) : (
-          <p>Drag 'n' drop an Excel file here, or click to select</p>
+          <p>Drag and drop a .out or .txt file here, or click to select</p>
         )}
       </div>
 
@@ -209,7 +208,7 @@ export default function ExcelDropzone() {
         </label>
       </div>
 
-      {/* Chart Section */}
+      {/* Axis Selection + Chart */}
       {excelData.length > 0 && showChart ? (
         <div
           style={{
@@ -220,32 +219,45 @@ export default function ExcelDropzone() {
             marginTop: "20px",
           }}
         >
-          {/* Y-Axis Checkbox Section */}
-          <div style={{ color: "white", minWidth: "180px" }}>
-            <p>Select Y-Axes:</p>
-            {["TWX", "TWY", "TWZ"].map((axis) => (
+          {/* Y-Axis Radio Buttons */}
+          <div
+            style={{
+              color: "white",
+              minWidth: "180px",
+              textAlign: "left",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-start",
+            }}
+          >
+            <p>Select Y-Axis (One at a time):</p>
+            {availableAxes.map((axis) => (
               <label
                 key={axis}
-                style={{ display: "block", marginBottom: "8px" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  marginBottom: "8px",
+                  gap: "6px",
+                }}
               >
                 <input
-                  type="checkbox"
-                  checked={selectedYAxes[axis]}
-                  onChange={() => handleYAxisChange(axis)}
+                  type="radio"
+                  name="y-axis"
+                  checked={selectedAxis === axis}
+                  onChange={() => handleAxisChange(axis)}
                 />
-                &nbsp; {axis}
+                {axis} {columnUnits[axis] ? `${columnUnits[axis]}` : ""}
               </label>
             ))}
           </div>
 
-          {/* Chart Display */}
+          {/* Line Chart */}
           <div style={{ flex: 1 }}>
-            {datasets.length === 0 ? (
-              <p style={{ color: "white" }}>
-                Please select at least one Y-axis to plot.
-              </p>
-            ) : (
+            {selectedAxis ? (
               <Line data={chartData} options={chartOptions} />
+            ) : (
+              <p style={{ color: "white" }}>Please select a column to plot.</p>
             )}
           </div>
         </div>
